@@ -1,7 +1,7 @@
 " 看中文小说txt专用插件
 " Maintainer:  sunsolzn@gmail.com
-" Date:        2012-4-12
-" Version:     0.1
+" Date:        2012-5-27
+" Version:     0.2
 "README{{{
 "只适用gvim和txt文件,本文件放到plugin目录
 "F5 读取字体等设置（默认保存在.vim/read_novel_config.vim）
@@ -15,6 +15,7 @@
 "看新的小说：用gvim打开新小说，按F5，再按F7
 "看小说：用gvim打开txt小说，按F5,再按F8
 "调整阅读速度：用gvim打开已断行的小说，按F5,按F9开始看小说，期间按空格或pgdn翻页，不受打扰的看10页以后按F10结束，再按F6保存
+"修正enc是gb2312执行此插件产生错误的问题
 "}}}
 "{{{
 if exists('g:did_read_novel_plugin')
@@ -49,6 +50,11 @@ if !exists('g:read_novel_config_b')
 endif
 "}}}
 "局部变量 {{{
+if &enc == 'utf-8'
+	let s:DISPLAYCHAR="\u2b1b"
+else
+	let s:DISPLAYCHAR="O"
+endif
 let s:seconds =[]
 let s:start_time=0
 let s:chars=[]
@@ -59,6 +65,7 @@ function! s:global_config_load()"{{{
         call writefile(config,g:read_novel_config_file)
     endif
     execute 'source ' . g:read_novel_config_file
+    set ambiwidth=double
 endfunc
 "}}}
 function! s:global_config_save()"{{{
@@ -101,22 +108,24 @@ function! s:Clear_empty_line()"{{{
 endfunc
 "}}}
 function! s:Wrap_longline()"{{{
-    set nocindent
-    set noautoindent
-    set nosmartindent
-    set indentexpr=
- "    set lazyredraw
-    set wrap
     call s:Backup_file()
+    write
+    let save = &l:statusline
+    let save1 = &laststatus
+    set laststatus=2
+    setlocal statusline=%=0%%
+    setlocal nocindent
+    setlocal noautoindent
+    setlocal nosmartindent
+    setlocal indentexpr=
+    setlocal formatoptions+=M  
+ "    set lazyredraw
+    setlocal wrap
 	normal gg
     let processmax = line('$')
     let i = 0
     let max = &columns - 5
 	let lastline = 0
-    let save = &statusline
-    let save1 = &laststatus
-    set laststatus=2
-    set statusline=%=0%%
 	while 1
 		normal 0g$
 		let a = col(".")
@@ -125,7 +134,7 @@ function! s:Wrap_longline()"{{{
 		if a == b
 			normal j
             let i = i + 1
-            execute 'set statusline=' . repeat('⬛',i * max / processmax) . '%=' . i * 100 / processmax . '%%'
+            execute 'setlocal statusline=' . repeat(s:DISPLAYCHAR,i * max / processmax) . '%=' . i * 100 / processmax . '%%'
             redrawstatus
 		else
 			execute "normal 0g$i\<CR>"
@@ -139,9 +148,8 @@ function! s:Wrap_longline()"{{{
 	endwhile
     call s:Clear_empty_line()
     write
-    let &statusline = save
+    let &l:statusline = save
     let &laststatus = save1
- "    set nolazyredraw
     normal gg
 endfunc
 "}}}
@@ -163,7 +171,7 @@ EOF
     while i <= line('w$')
         let s = getline(i)
         if has('python')
-            python vim.command("let c+="+str(len(filter(ischar,vim.eval('s').decode('utf8')))))
+            python vim.command("let c+="+str(len(filter(ischar,vim.eval('s').decode(vim.eval('&enc'))))))
         else
             let c = c + strlen(substitute(s,'.','x','g'))
         endif
@@ -234,10 +242,10 @@ function! s:End_test()"{{{
 endfunc
 "}}}
 function! s:Auto_scroll()"{{{
-    let save = &statusline
+    let save = &l:statusline
     let save1 = &laststatus
     set laststatus=2
-    set statusline=%=0%%
+    setlocal statusline=%=0%%
     let max = &columns - 5
     while 1
         try
@@ -247,18 +255,21 @@ function! s:Auto_scroll()"{{{
             let tt = float2nr(t) + 1
             let i = 0
             while i < tt
-                execute 'set statusline=' . repeat('⬛',i * max / tt) . '%=%p%%'
+                execute 'setlocal statusline=' . repeat(s:DISPLAYCHAR,i * max / tt) . '%=%p%%'
                 redrawstatus
                 let i += 1
                 sleep 1
             endwhile
             execute "normal \<c-f>"
             redraw
+	    if line('.') == line('$')
+		break
+	    endif
         catch
             break
         endtry
     endwhile
-    let &statusline = save
+    let &l:statusline = save
     let &laststatus = save1
 endfunc
         "}}}
